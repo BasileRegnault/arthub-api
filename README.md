@@ -61,36 +61,52 @@ User
  ├── email
  ├── password
  ├── role (USER/ADMIN)
+ ├── profilePicture
+ ├── createdAt
+ ├── updatedAt
 
 Artist
  ├── id
- ├── name
- ├── birthYear, deathYear
+ ├── firstName
+ ├── lastName  
+ ├── bornAt, diedAt
  ├── nationality
  ├── biography
+ ├── createdAt
+ ├── updatedAt
+ ├── profilePicture
 
 Artwork
  ├── id
  ├── title
  ├── type (painting, sculpture, etc.)
  ├── style (impressionism, etc.)
- ├── year
+ ├── creationDate
  ├── description
  ├── imageUrl
  ├── artist (ManyToOne)
  ├── location
+ ├── isDisplay
+ ├── createdAt
+ ├── updatedAt
 
-Collection
+
+Gallery
  ├── id
  ├── name
- ├── user (ManyToOne)
+ ├── description
+ ├── owner (ManyToOne)
  ├── artworks (ManyToMany)
+ ├── coverImage
+ ├── isPublic
+ ├── createdAt
+ ├── updatedAt
 
 Rating
  ├── id
  ├── score (1–5)
  ├── comment
- ├── user (ManyToOne)
+ ├── author (ManyToOne)
  ├── artwork (ManyToOne)
 ````
 
