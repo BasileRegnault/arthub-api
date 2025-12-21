@@ -9,26 +9,57 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use ApiPlatform\Metadata\Put;
 use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use Symfony\Component\Serializer\Annotation\Groups;
+use ApiPlatform\Metadata\ApiProperty;
+use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
+use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 
 use App\Repository\ArtistRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Vich\UploaderBundle\Mapping\Annotation as Vich;
+
+use Symfony\Component\Validator\Constraints as Assert;
 
 #[ApiResource(
     operations: [
         new GetCollection(),
         new Get(),
-        new Post(security: "is_granted('ROLE_ADMIN')"),
-        new Put(security: "is_granted('ROLE_ADMIN')"),
-        new Delete(security: "is_granted('ROLE_ADMIN')")
+        new Put(),
+        new Patch(),
+        new Delete(),
+        new Post(),
+        // new Post(security: "is_granted('ROLE_ADMIN')"),
+        // new Put(security: "is_granted('ROLE_ADMIN')"),
+        // new Delete(security: "is_granted('ROLE_ADMIN')")
     ],
     normalizationContext: ['groups' => ['artist:read']],
-    denormalizationContext: ['groups' => ['artist:write']]
+    denormalizationContext: ['groups' => ['artist:write']],
+    formats: [
+        'jsonld' => ['application/ld+json'],
+        'multipart' => ['multipart/form-data'],
+        'json' => ['application/json'],
+    ]
 )]
+#[ApiFilter(SearchFilter::class, properties: [
+    'firstname' => 'ipartial',
+    'lastname' => 'ipartial',
+    'nationality' => 'exact'
+])]
+#[ApiFilter(DateFilter::class, properties: [
+    'bornAt',
+    'diedAt'
+])]
+#[ApiFilter(OrderFilter::class, properties: [
+    'firstname',
+    'lastname',
+    'bornAt'
+], arguments: ['orderParameterName' => 'order'])]
+#[Vich\Uploadable]
 #[ORM\HasLifecycleCallbacks]
 #[ORM\Entity(repositoryClass: ArtistRepository::class)]
 class Artist
@@ -41,18 +72,25 @@ class Artist
 
     #[ORM\Column(length: 255)]
     #[Groups(['artist:read', 'artist:write', 'artwork:read'])]
+    #[Assert\NotBlank(message: "Le prénom est obligatoire.")]
+    #[Assert\Length(min: 2, minMessage: "Le prénom doit faire au moins 2 caractères.")]
     private ?string $firstname = null;
 
     #[ORM\Column(length: 255)]
     #[Groups(['artist:read', 'artist:write', 'artwork:read'])]
+    #[Assert\NotBlank(message: "Le nom est obligatoire.")]
+    #[Assert\Length(min: 2, minMessage: "Le nom doit faire au moins 2 caractères.")]
     private ?string $lastname = null;
 
-    #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
+    #[ORM\Column(type: Types::DATE_IMMUTABLE)]
     #[Groups(['artist:read', 'artist:write'])]
+    #[Assert\NotBlank(message: "La date de naissance est obligatoire.")]
+    #[Assert\LessThanOrEqual("today", message: "La date de naissance ne peut pas être dans le futur.")]
     private ?\DateTimeImmutable $bornAt = null;
 
-    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    #[ORM\Column(type: Types::DATE_IMMUTABLE, nullable: true)]
     #[Groups(['artist:read', 'artist:write'])]
+    #[Assert\LessThanOrEqual("today", message: "La date de décès ne peut pas être dans le futur.")]
     private ?\DateTimeImmutable $diedAt = null;
 
     #[ORM\Column(length: 255, nullable: true)]
@@ -63,15 +101,19 @@ class Artist
     #[Groups(['artist:read', 'artist:write'])]
     private ?string $biography = null;
 
-    #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
+    #[ORM\Column(options: ['default' => 'CURRENT_TIMESTAMP'])]
+    #[Groups(['artist:read', 'artist:write'])]
     private ?\DateTimeImmutable $createdAt = null;
 
-    #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    #[Groups(['artist:read', 'artist:write'])]
     private ?\DateTimeImmutable $updatedAt = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
+    #[ORM\ManyToOne(targetEntity: MediaObject::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    #[ApiProperty(types: ['https://schema.org/image'])]
     #[Groups(['artist:read', 'artist:write'])]
-    private ?string $profilePicture = null;
+    private ?MediaObject $profilePicture = null;
 
     /**
      * @var Collection<int, Artwork>
@@ -88,13 +130,18 @@ class Artist
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
-        $this->createdAt = new \DateTimeImmutable();
+         if (!$this->createdAt) {
+            $this->createdAt = new \DateTimeImmutable();
+        }
     }
 
     #[ORM\PreUpdate]
     public function onPreUpdate(): void
     {
         $this->updatedAt = new \DateTimeImmutable();
+        if (!$this->createdAt) {
+            $this->createdAt = new \DateTimeImmutable();
+        }
     }
 
     public function getId(): ?int
@@ -198,12 +245,12 @@ class Artist
         return $this;
     }
 
-    public function getProfilePicture(): ?string
+    public function getProfilePicture(): ?MediaObject
     {
         return $this->profilePicture;
     }
 
-    public function setProfilePicture(?string $profilePicture): static
+    public function setProfilePicture(?MediaObject $profilePicture): static
     {
         $this->profilePicture = $profilePicture;
 

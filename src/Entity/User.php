@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Put;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use Symfony\Component\Serializer\Annotation\Groups;
+use ApiPlatform\Metadata\ApiProperty;
 
 use App\Repository\UserRepository;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -19,6 +20,8 @@ use Doctrine\ORM\Mapping as ORM;
 use Doctrine\DBAL\Types\Types;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+
+use Symfony\Component\Validator\Constraints as Assert;
 
 #[ApiResource(
      operations: [
@@ -44,10 +47,19 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?int $id = null;
 
     #[ORM\Column(length: 255, unique: true)]
+    #[Assert\NotBlank(message: "Le nom d'utilisateur est obligatoire.")]
+    #[Assert\Length(
+        min: 3,
+        max: 255,
+        minMessage: "Le nom d'utilisateur doit contenir au moins {{ limit }} caractères.",
+        maxMessage: "Le nom d'utilisateur ne peut pas dépasser {{ limit }} caractères."
+    )]
     #[Groups(['user:read', 'user:write', 'gallery:read', 'rating:read'])]
     private ?string $username = null;
 
     #[ORM\Column(length: 180)]
+    #[Assert\NotBlank(message: "L'email est obligatoire.")]
+    #[Assert\Email(message: "L'email '{{ value }}' n'est pas valide.")]
     #[Groups(['user:read', 'user:write'])]
     private ?string $email = null;
 
@@ -62,16 +74,19 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
      * @var string The hashed password
      */
     #[ORM\Column]
+    #[Assert\NotBlank(message: "Le mot de passe est obligatoire.")]
     private ?string $password = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
+    #[ORM\ManyToOne(targetEntity: MediaObject::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    #[ApiProperty(types: ['https://schema.org/image'])]
     #[Groups(['user:read', 'user:write'])]
-    private ?string $profilePicture = null;
+    private ?MediaObject $profilePicture = null;
 
-    #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
+    #[ORM\Column(options: ['default' => 'CURRENT_TIMESTAMP'])]
     private ?\DateTimeImmutable $createdAt = null;
 
-    #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $updatedAt = null;
 
     /**
@@ -86,22 +101,41 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToMany(targetEntity: Rating::class, mappedBy: 'author')]
     private Collection $ratings;
 
+    /**
+     * @var Collection<int, UserLoginLog>
+     */
+    #[ORM\OneToMany(targetEntity: UserLoginLog::class, mappedBy: 'userConnected', orphanRemoval: true)]
+    private Collection $userLoginLogs;
+
+    /**
+     * @var Collection<int, ActivityLog>
+     */
+    #[ORM\OneToMany(targetEntity: ActivityLog::class, mappedBy: 'userConnected')]
+    private Collection $activityLogs;
+
     public function __construct()
     {
         $this->galleries = new ArrayCollection();
         $this->ratings = new ArrayCollection();
+        $this->userLoginLogs = new ArrayCollection();
+        $this->activityLogs = new ArrayCollection();
     }
 
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
-        $this->createdAt = new \DateTimeImmutable();
+         if (!$this->createdAt) {
+            $this->createdAt = new \DateTimeImmutable();
+        }
     }
 
     #[ORM\PreUpdate]
     public function onPreUpdate(): void
     {
         $this->updatedAt = new \DateTimeImmutable();
+        if (!$this->createdAt) {
+            $this->createdAt = new \DateTimeImmutable();
+        }
     }
 
     public function getId(): ?int
@@ -202,12 +236,12 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this->createdAt;
     }
 
-    public function getProfilePicture(): ?string
+    public function getProfilePicture(): ?MediaObject
     {
         return $this->profilePicture;
     }
 
-    public function setProfilePicture(?string $profilePicture): static
+    public function setProfilePicture(?MediaObject $profilePicture): static
     {
         $this->profilePicture = $profilePicture;
 
@@ -287,6 +321,66 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
             // set the owning side to null (unless already changed)
             if ($rating->getAuthor() === $this) {
                 $rating->setAuthor(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, UserLoginLog>
+     */
+    public function getUserLoginLogs(): Collection
+    {
+        return $this->userLoginLogs;
+    }
+
+    public function addUserLoginLog(UserLoginLog $userLoginLog): static
+    {
+        if (!$this->userLoginLogs->contains($userLoginLog)) {
+            $this->userLoginLogs->add($userLoginLog);
+            $userLoginLog->setUserConnected($this);
+        }
+
+        return $this;
+    }
+
+    public function removeUserLoginLog(UserLoginLog $userLoginLog): static
+    {
+        if ($this->userLoginLogs->removeElement($userLoginLog)) {
+            // set the owning side to null (unless already changed)
+            if ($userLoginLog->getUserConnected() === $this) {
+                $userLoginLog->setUserConnected(null);
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, ActivityLog>
+     */
+    public function getActivityLogs(): Collection
+    {
+        return $this->activityLogs;
+    }
+
+    public function addActivityLog(ActivityLog $activityLog): static
+    {
+        if (!$this->activityLogs->contains($activityLog)) {
+            $this->activityLogs->add($activityLog);
+            $activityLog->setUserConnected($this);
+        }
+
+        return $this;
+    }
+
+    public function removeActivityLog(ActivityLog $activityLog): static
+    {
+        if ($this->activityLogs->removeElement($activityLog)) {
+            // set the owning side to null (unless already changed)
+            if ($activityLog->getUserConnected() === $this) {
+                $activityLog->setUserConnected(null);
             }
         }
 

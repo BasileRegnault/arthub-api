@@ -11,6 +11,8 @@ use ApiPlatform\Metadata\Put;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use Symfony\Component\Serializer\Annotation\Groups;
+use ApiPlatform\Metadata\ApiProperty;
+use Symfony\Component\Validator\Constraints as Assert;
 
 use App\Repository\GalleryRepository;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -39,27 +41,41 @@ class Gallery
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Assert\NotBlank(message: "Le nom est requis.")]
+    #[Assert\Length(
+        max: 255,
+        maxMessage: "Le nom ne peut pas dépasser {{ limit }} caractères."
+    )]
     #[Groups(['gallery:read', 'gallery:write'])]
     private ?string $name = null;
 
     #[ORM\Column(length: 255, nullable: true)]
+    #[Assert\Length(
+        max: 255,
+        maxMessage: "La description ne peut pas dépasser {{ limit }} caractères."
+    )]
     #[Groups(['gallery:read', 'gallery:write'])]
     private ?string $description = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
+    #[ORM\ManyToOne(targetEntity: MediaObject::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    #[ApiProperty(types: ['https://schema.org/image'])]
     #[Groups(['gallery:read', 'gallery:write'])]
-    private ?string $coverImage = null;
+    private ?MediaObject $coverImage = null;
 
     #[ORM\Column(nullable: true)]
+    #[Assert\PositiveOrZero(message: "Le nombre de vues doit être positif ou nul.")]
     #[Groups(['gallery:read', 'gallery:write'])]
     private ?int $views = null;
 
     #[ORM\Column]
+    #[Assert\NotNull(message: "Le statut de publication est requis.")]
     #[Groups(['gallery:read', 'gallery:write'])]
     private ?bool $isPublic = null;
 
     #[ORM\ManyToOne(inversedBy: 'galleries')]
     #[ORM\JoinColumn(nullable: false)]
+    #[Assert\NotNull(message: "Le propriétaire est requis.")]
     #[Groups(['gallery:read', 'gallery:write'])]
     private ?User $owner = null;
 
@@ -70,7 +86,7 @@ class Gallery
     #[Groups(['gallery:read', 'gallery:write'])]
     private Collection $artworks;
 
-    #[ORM\Column]
+    #[ORM\Column(options: ['default' => 'CURRENT_TIMESTAMP'])]
     private ?\DateTimeImmutable $createdAt = null;
 
     #[ORM\Column(nullable: true)]
@@ -84,13 +100,18 @@ class Gallery
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
-        $this->createdAt = new \DateTimeImmutable();
+         if (!$this->createdAt) {
+            $this->createdAt = new \DateTimeImmutable();
+        }
     }
 
     #[ORM\PreUpdate]
     public function onPreUpdate(): void
     {
         $this->updatedAt = new \DateTimeImmutable();
+        if (!$this->createdAt) {
+            $this->createdAt = new \DateTimeImmutable();
+        }
     }
 
     public function getId(): ?int
@@ -122,12 +143,12 @@ class Gallery
         return $this;
     }
 
-    public function getCoverImage(): ?string
+    public function getCoverImage(): ?MediaObject
     {
         return $this->coverImage;
     }
 
-    public function setCoverImage(?string $coverImage): static
+    public function setCoverImage(?MediaObject $coverImage): static
     {
         $this->coverImage = $coverImage;
 

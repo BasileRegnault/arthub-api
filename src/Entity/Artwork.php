@@ -10,7 +10,15 @@ use ApiPlatform\Metadata\Post;
 use ApiPlatform\Metadata\Put;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Doctrine\Orm\Filter\BooleanFilter;
+use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
+use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
 use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\HttpFoundation\File\File;
+use ApiPlatform\Metadata\ApiProperty;
+use ApiPlatform\Metadata\Patch;
+use Symfony\Component\Validator\Constraints as Assert;
+
 
 use App\Enum\ArtworkStyle;
 use App\Enum\ArtworkType;
@@ -19,24 +27,61 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Vich\UploaderBundle\Mapping\Annotation as Vich;
 
 #[ApiResource(
+    paginationItemsPerPage: 10,
+    paginationClientItemsPerPage: true,
+    paginationClientEnabled: true,
     operations: [
         new GetCollection(),
         new Get(),
-        new Post(security: "is_granted('ROLE_ADMIN')"),
-        new Put(security: "is_granted('ROLE_ADMIN')"),
-        new Delete(security: "is_granted('ROLE_ADMIN')")
+        new Post(
+            inputFormats: ['multipart' => ['multipart/form-data']],
+        ),
+        new Put(),
+        new Patch(),
+        new Delete()
+        //new Put(security: "is_granted('ROLE_ADMIN')"),
+        //new Delete(security: "is_granted('ROLE_ADMIN')")
     ],
     normalizationContext: ['groups' => ['artwork:read']],
-    denormalizationContext: ['groups' => ['artwork:write']]
+    denormalizationContext: ['groups' => ['artwork:write']],
+    formats: [
+        'jsonld' => ['application/ld+json'],
+        'multipart' => ['multipart/form-data'],
+        'json' => ['application/json'],
+    ]
 )]
 #[ApiFilter(SearchFilter::class, properties: [
+    'title' => 'partial',
     'type' => 'exact',
     'style' => 'exact',
+    'location' => 'partial',
     'artist' => 'exact',
-    'isDisplay' => 'exact'
+    'artist.firstname' => 'partial',
+    'artist.lastname' => 'partial',
 ])]
+
+#[ApiFilter(BooleanFilter::class, properties: [
+    'isDisplay',
+])]
+
+#[ApiFilter(DateFilter::class, properties: [
+    'creationDate',
+    'createdAt',
+    'updatedAt',
+])]
+
+#[ApiFilter(OrderFilter::class, properties: [
+    'title',
+    'creationDate',
+    'createdAt',
+    'views',
+], arguments: [
+    'orderParameterName' => 'order'
+])]
+#[Vich\Uploadable]
 #[ORM\HasLifecycleCallbacks]
 #[ORM\Entity(repositoryClass: ArtworkRepository::class)]
 class Artwork
@@ -49,50 +94,63 @@ class Artwork
 
     #[ORM\Column(length: 255)]
     #[Groups(['artwork:read', 'artwork:write', 'artist:read', 'gallery:read'])]
+    #[Assert\NotBlank(message: "Le titre est obligatoire.")]
+    #[Assert\Length(min: 2, minMessage: "Le titre doit faire au moins 2 caractères.")]
     private ?string $title = null;
 
     #[ORM\Column(enumType: ArtworkType::class)]
     #[Groups(['artwork:read', 'artwork:write'])]
+    #[Assert\NotBlank(message: "Le type est obligatoire.")]
     private ?ArtworkType $type = null;
 
     #[ORM\Column(enumType: ArtworkStyle::class)]
     #[Groups(['artwork:read', 'artwork:write'])]
+    #[Assert\NotBlank(message: "Le style est obligatoire.")]
     private ?ArtworkStyle $style = null;
 
-    #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
+    #[ORM\Column(type: Types::DATE_IMMUTABLE)]
     #[Groups(['artwork:read', 'artwork:write'])]
+    #[Assert\NotBlank(message: "La date de création est obligatoire.")]
+    #[Assert\LessThanOrEqual("today", message: "L'œuvre ne peut pas être datée du futur.")]
     private ?\DateTimeImmutable $creationDate = null;
 
     #[ORM\Column(type: Types::TEXT)]
     #[Groups(['artwork:read', 'artwork:write'])]
+    #[Assert\NotBlank(message: "La description est obligatoire.")]
+    #[Assert\Length(min: 20, minMessage: "La description doit faire au moins 20 caractères.")]
     private ?string $description = null;
 
-    #[ORM\Column(length: 255)]
+    #[ORM\ManyToOne(targetEntity: MediaObject::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    #[ApiProperty(types: ['https://schema.org/image'])]
     #[Groups(['artwork:read', 'artwork:write'])]
-    private ?string $imageUrl = null;
+    private ?MediaObject $image = null;
 
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['artwork:read', 'artwork:write'])]
     private ?string $location = null;
 
     #[ORM\Column(nullable: true)]
-    #[Groups(['artwork:read', 'artwork:write'])]
-    private ?int $views = null;
+    #[Groups(['artwork:read'])]
+    private ?int $views = 0;
 
     #[ORM\ManyToOne(inversedBy: 'artworks')]
     #[ORM\JoinColumn(nullable: false)]
     #[Groups(['artwork:read', 'artwork:write'])]
+    #[Assert\NotNull(message: "L'artiste est obligatoire.")]
     private ?Artist $artist = null;
 
-    #[ORM\Column]
+    #[ORM\Column(options: ['default' => 'CURRENT_TIMESTAMP'])]
+    #[Groups(['artwork:read'])]
     private ?\DateTimeImmutable $createdAt = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['artwork:read'])]
     private ?\DateTimeImmutable $updatedAt = null;
 
     #[ORM\Column]
     #[Groups(['artwork:read', 'artwork:write'])]
-    private ?bool $isDisplay = null;
+    private ?bool $isDisplay = true;
 
     /**
      * @var Collection<int, Gallery>
@@ -104,7 +162,7 @@ class Artwork
      * @var Collection<int, Rating>
      */
     #[ORM\OneToMany(targetEntity: Rating::class, mappedBy: 'artwork')]
-    #[Groups(['artwork:read', 'artwork:write'])]
+    #[Groups(['artwork:read'])]
     private Collection $ratings;
 
     public function __construct()
@@ -116,13 +174,18 @@ class Artwork
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
-        $this->createdAt = new \DateTimeImmutable();
+         if (!$this->createdAt) {
+            $this->createdAt = new \DateTimeImmutable();
+        }
     }
 
     #[ORM\PreUpdate]
     public function onPreUpdate(): void
     {
         $this->updatedAt = new \DateTimeImmutable();
+        if (!$this->createdAt) {
+            $this->createdAt = new \DateTimeImmutable();
+        }
     }
 
     public function getId(): ?int
@@ -190,16 +253,14 @@ class Artwork
         return $this;
     }
 
-    public function getImageUrl(): ?string
-    {
-        return $this->imageUrl;
+    public function getImage(): ?MediaObject
+    { 
+        return $this->image; 
     }
 
-    public function setImageUrl(string $imageUrl): static
-    {
-        $this->imageUrl = $imageUrl;
-
-        return $this;
+    public function setImage(?MediaObject $img): static 
+    { 
+        $this->image = $img; return $this; 
     }
 
     public function getLocation(): ?string
@@ -262,7 +323,7 @@ class Artwork
         return $this;
     }
 
-    public function isDisplay(): ?bool
+    public function getIsDisplay(): ?bool
     {
         return $this->isDisplay;
     }

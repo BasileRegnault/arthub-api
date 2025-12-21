@@ -33,14 +33,19 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity(repositoryClass: RatingRepository::class)]
 class Rating
 {
-    #[ORM\Id]
+#[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
     #[Groups(['rating:read', 'artwork:read', 'user:read'])]
     private ?int $id = null;
 
     #[ORM\Column(type: 'float')]
-    #[Assert\Range(min: 0, max: 5)]
+    #[Assert\NotNull(message: "Le score est obligatoire.")]
+    #[Assert\Range(
+        min: 0,
+        max: 5,
+        notInRangeMessage: "Le score doit être compris entre {{ min }} et {{ max }}."
+    )]
     #[Groups(['rating:read', 'rating:write', 'artwork:read'])]
     private ?float $score = null;
 
@@ -50,15 +55,17 @@ class Rating
 
     #[ORM\ManyToOne(inversedBy: 'ratings')]
     #[ORM\JoinColumn(nullable: false)]
+    #[Assert\NotNull(message: "L'auteur est obligatoire.")]
     #[Groups(['rating:read', 'rating:write'])]
     private ?User $author = null;
 
     #[ORM\ManyToOne(inversedBy: 'ratings')]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
+    #[Assert\NotNull(message: "L'œuvre est obligatoire.")]
     #[Groups(['rating:read', 'rating:write'])]
     private ?Artwork $artwork = null;
 
-    #[ORM\Column]
+    #[ORM\Column(options: ['default' => 'CURRENT_TIMESTAMP'])]
     private ?\DateTimeImmutable $createdAt = null;
 
     #[ORM\Column(nullable: true)]
@@ -67,13 +74,18 @@ class Rating
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
-        $this->createdAt = new \DateTimeImmutable();
+         if (!$this->createdAt) {
+            $this->createdAt = new \DateTimeImmutable();
+        }
     }
 
     #[ORM\PreUpdate]
     public function onPreUpdate(): void
     {
         $this->updatedAt = new \DateTimeImmutable();
+        if (!$this->createdAt) {
+            $this->createdAt = new \DateTimeImmutable();
+        }
     }
 
     public function getId(): ?int

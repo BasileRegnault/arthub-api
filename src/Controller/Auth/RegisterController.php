@@ -3,6 +3,8 @@
 namespace App\Controller\Auth;
 
 use App\Entity\User;
+use App\Entity\UserLoginLog;
+use App\Enum\AuthEvent;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -20,26 +22,73 @@ class RegisterController extends AbstractController
     ): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
+
         $email = $data['email'] ?? null;
+        $username = $data['username'] ?? null;
         $password = $data['password'] ?? null;
 
-        if (!$email || !$password) {
-            return new JsonResponse(['message' => 'Email et mot de passe requis'], 400);
+        if (!$email || !$password || !$username) {
+            return new JsonResponse(['error' => 'Email, username ou mot de passe manquant'], 400);
         }
 
-        // Vérifier si l'utilisateur existe déjà
-        if ($em->getRepository(User::class)->findOneBy(['email' => $email])) {
-            return new JsonResponse(['message' => 'Utilisateur déjà existant'], 400);
+        $userRepo = $em->getRepository(User::class);
+
+        // Vérifie doublon avant flush
+        if ($userRepo->findOneBy(['email' => $email])) {
+            $this->logRegister($em, null, AuthEvent::REGISTER_FAILED, $request, 'Email déjà utilisé');
+            return new JsonResponse(['error' => 'Utilisateur déjà existant'], 400);
         }
+
+        if ($userRepo->findOneBy(['username' => $username])) {
+            $this->logRegister($em, null, AuthEvent::REGISTER_FAILED, $request, 'Nom d\'utilisateur déjà utilisé');
+            return new JsonResponse(['error' => 'Nom d\'utilisateur déjà utilisé'], 400);
+        }
+
 
         $user = new User();
         $user->setEmail($email);
+        $user->setUsername($username);
         $user->setPassword($passwordHasher->hashPassword($user, $password));
         $user->setRoles(['ROLE_USER']);
 
-        $em->persist($user);
-        $em->flush();
+        try {
+            $em->persist($user);
+            $em->flush();
 
-        return new JsonResponse(['message' => 'Utilisateur créé avec succès'], 201);
+            // Log succès
+            $this->logRegister($em, $user, AuthEvent::REGISTER_SUCCESS, $request);
+
+            return new JsonResponse(['message' => 'Utilisateur créé avec succès'], 201);
+
+        } catch (\Throwable $e) {
+            // Log échec sans crash si EM fermé
+            $this->logRegister($em, null, AuthEvent::REGISTER_FAILED, $request, $e->getMessage());
+
+            return new JsonResponse(['error' => 'Erreur lors de l’inscription'], 500);
+        }
+    }
+
+    private function logRegister(
+        EntityManagerInterface $em,
+        ?User $user,
+        AuthEvent $event,
+        Request $request,
+        ?string $reason = null
+    ): void {
+        if (!$em->isOpen()) return;
+
+        try {
+            $log = new UserLoginLog();
+            $log->setUserConnected($user);
+            $log->setEvent($event->value);
+            $log->setIp($request->getClientIp() ?? 'unknown');
+            $log->setUserAgent($request->headers->get('User-Agent'));
+            $log->setMessage($reason);
+
+            $em->persist($log);
+            $em->flush();
+        } catch (\Throwable $e) {
+            // Pas d'action si le log échoue
+        }
     }
 }

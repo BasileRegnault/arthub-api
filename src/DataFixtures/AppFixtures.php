@@ -12,7 +12,9 @@ use App\Enum\ArtworkType;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Faker\Factory;
+use App\Entity\MediaObject;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Symfony\Component\HttpFoundation\File\File;
 
 class AppFixtures extends Fixture
 {
@@ -30,12 +32,16 @@ class AppFixtures extends Fixture
         // --- USERS ---
         $users = [];
 
+        $media = new MediaObject();
+        $media->filePath = 'user_fixture.jpg';
+        $manager->persist($media);
+
         // Admin
         $admin = new User();
         $admin->setUsername('admin');
         $admin->setEmail('admin@example.com');
         $admin->setRoles(['ADMIN']);
-        $admin->setProfilePicture($this->faker->imageUrl(200,200,'people'));
+        $admin->setProfilePicture($media);
         $admin->setCreatedAt(new \DateTimeImmutable('-2 years'));
         $admin->setUpdatedAt(new \DateTimeImmutable('-1 year'));
         $admin->setPassword($this->passwordHasher->hashPassword($admin, 'adminpass'));
@@ -48,7 +54,7 @@ class AppFixtures extends Fixture
             $user->setUsername($this->faker->userName . $i);
             $user->setEmail($this->faker->unique()->safeEmail);
             $user->setRoles(['USER']);
-            $user->setProfilePicture($this->faker->imageUrl(200,200,'people'));
+            $user->setProfilePicture($media);
             $created = $this->faker->dateTimeBetween('-2 years', 'now');
             $user->setCreatedAt(\DateTimeImmutable::createFromMutable($created));
             $user->setUpdatedAt(new \DateTimeImmutable());
@@ -59,6 +65,12 @@ class AppFixtures extends Fixture
 
         // --- ARTISTS ---
         $artists = [];
+
+        $media = new MediaObject();
+        $media->filePath = 'artists_fixture.jpg';
+        $manager->persist($media);
+
+
         for ($i = 0; $i < 12; $i++) {
             $artist = new Artist();
             $artist->setFirstname($this->faker->firstName);
@@ -74,7 +86,7 @@ class AppFixtures extends Fixture
             }
             $artist->setNationality($this->faker->country);
             $artist->setBiography($this->faker->paragraphs(3, true));
-            $artist->setProfilePicture($this->faker->imageUrl(400,400,'people'));
+            $artist->setProfilePicture($media);
             $artist->setCreatedAt(new \DateTimeImmutable('-1 year'));
             $artist->setUpdatedAt(new \DateTimeImmutable());
             $manager->persist($artist);
@@ -85,6 +97,10 @@ class AppFixtures extends Fixture
         $types = ArtworkType::cases();
         $styles = ArtworkStyle::cases();
 
+        $media = new MediaObject();
+        $media->filePath = 'art_fixture.jpg';
+        $manager->persist($media);
+
         $artworks = [];
         for ($i = 0; $i < 40; $i++) {
             $art = new Artwork();
@@ -93,7 +109,7 @@ class AppFixtures extends Fixture
             $art->setStyle($this->faker->randomElement($styles));
             $art->setCreationDate(new \DateTimeImmutable('-3 months'));
             $art->setDescription($this->faker->paragraphs(2, true));
-            $art->setImageUrl($this->faker->imageUrl(800,600,'art'));
+            $art->setImage($media);
             $artist = $this->faker->randomElement($artists);
             $art->setArtist($artist);
             $art->setLocation($this->faker->city);
@@ -107,6 +123,11 @@ class AppFixtures extends Fixture
 
         // --- GALLERIES ---
         $galleries = [];
+
+        $media = new MediaObject();
+        $media->filePath = 'gallery_fixture.jpg';
+        $manager->persist($media);
+
         foreach ($users as $idx => $owner) {
             // give some users no gallery
             if ($this->faker->boolean(80)) {
@@ -114,7 +135,7 @@ class AppFixtures extends Fixture
                 $gallery->setName($owner->getUsername() . "'s gallery");
                 $gallery->setDescription($this->faker->sentence(12));
                 $gallery->setOwner($owner);
-                $gallery->setCoverImage($this->faker->imageUrl(1200,400,'city'));
+                $gallery->setCoverImage($media);
                 $gallery->setIsPublic($this->faker->boolean(60));
                 $gallery->setViews($this->faker->numberBetween(0, 100));
                 $gallery->setCreatedAt(new \DateTimeImmutable('-3 months'));
