@@ -4,8 +4,8 @@ namespace App\Enum;
 
 enum ArtworkStyle: string
 {
-    case IMPRESSIONISM = 'impressionism';
-    case REALISM = 'realism';
-    case CUBISM = 'cubism';
-    case ABSTRACT = 'abstract';
+    case IMPRESSIONISM = 'Impressionism';
+    case REALISM = 'Realism';
+    case CUBISM = 'Cubism';
+    case ABSTRACT = 'Abstract';
 }

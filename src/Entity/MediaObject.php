@@ -33,6 +33,14 @@ class MediaObject
 
     #[Vich\UploadableField(mapping: 'artwork_image', fileNameProperty: 'filePath')]
     #[Assert\NotNull]
+    #[Assert\Image(
+        maxSize: '15M',
+        mimeTypes: [
+            'image/jpeg',
+            'image/png',
+        ],
+        mimeTypesMessage: 'Formats autorisés : JPG, JPEG, PNG'
+    )]
     public ?File $file = null;
 
     #[ORM\Column(nullable: true)]

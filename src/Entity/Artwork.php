@@ -18,6 +18,7 @@ use Symfony\Component\HttpFoundation\File\File;
 use ApiPlatform\Metadata\ApiProperty;
 use ApiPlatform\Metadata\Patch;
 use Symfony\Component\Validator\Constraints as Assert;
+use App\State\ArtworkProcessor;
 
 
 use App\Enum\ArtworkStyle;
@@ -36,9 +37,7 @@ use Vich\UploaderBundle\Mapping\Annotation as Vich;
     operations: [
         new GetCollection(),
         new Get(),
-        new Post(
-            inputFormats: ['multipart' => ['multipart/form-data']],
-        ),
+        new Post(processor: ArtworkProcessor::class),
         new Put(),
         new Patch(),
         new Delete()
@@ -65,6 +64,7 @@ use Vich\UploaderBundle\Mapping\Annotation as Vich;
 
 #[ApiFilter(BooleanFilter::class, properties: [
     'isDisplay',
+    'isConfirmCreate'
 ])]
 
 #[ApiFilter(DateFilter::class, properties: [
@@ -151,6 +151,10 @@ class Artwork
     #[ORM\Column]
     #[Groups(['artwork:read', 'artwork:write'])]
     private ?bool $isDisplay = true;
+
+    #[ORM\Column]
+    #[Groups(['artwork:read', 'artwork:write'])]
+    private ?bool $isConfirmCreate = true;
 
     /**
      * @var Collection<int, Gallery>
@@ -331,6 +335,18 @@ class Artwork
     public function setIsDisplay(bool $isDisplay): static
     {
         $this->isDisplay = $isDisplay;
+
+        return $this;
+    }
+
+    public function getIsConfirmCreate(): ?bool
+    {
+        return $this->isConfirmCreate;
+    }
+
+    public function setIsConfirmCreate(?bool $isConfirmCreate): static
+    {
+        $this->isConfirmCreate = $isConfirmCreate;
 
         return $this;
     }

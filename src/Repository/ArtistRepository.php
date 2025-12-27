@@ -16,6 +16,16 @@ class ArtistRepository extends ServiceEntityRepository
         parent::__construct($registry, Artist::class);
     }
 
+    public function countByNationality(): array
+    {
+        return $this->createQueryBuilder('a')
+            ->select('a.nationality, COUNT(a.id) AS total')
+            ->groupBy('a.nationality')
+            ->getQuery()
+            ->getResult();
+    }
+
+
     //    /**
     //     * @return Artist[] Returns an array of Artist objects
     //     */

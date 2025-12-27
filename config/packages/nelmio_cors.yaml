@@ -10,4 +10,4 @@ nelmio_cors:
         '^/api/':
             allow_origin: ['http://localhost:4200']
             allow_headers: ['Content-Type', 'Authorization']
-            allow_methods: ['POST', 'GET', 'OPTIONS']
+            allow_methods: ['POST', 'GET', 'OPTIONS', 'PUT', 'PATCH', 'DELETE']

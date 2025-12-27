@@ -16,6 +16,41 @@ class ArtworkRepository extends ServiceEntityRepository
         parent::__construct($registry, Artwork::class);
     }
 
+    public function countCreatedByMonth(): array
+    {
+        $conn = $this->getEntityManager()->getConnection();
+
+        $sql = '
+            SELECT 
+                DATE_FORMAT(created_at, "%Y-%m") AS month,
+                COUNT(*) AS total
+            FROM artwork
+            GROUP BY month
+            ORDER BY month ASC
+        ';
+
+        return $conn->executeQuery($sql)->fetchAllAssociative();
+    }
+
+    public function countDisplayStatus(): array
+    {
+        return $this->createQueryBuilder('a')
+            ->select('a.isDisplay as status, COUNT(a.id) as total')
+            ->groupBy('status')
+            ->getQuery()
+            ->getArrayResult();
+    }
+
+    public function countByStyle(): array
+    {
+        return $this->createQueryBuilder('a')
+            ->select('a.style as style, COUNT(a.id) as total')
+            ->groupBy('a.style')
+            ->getQuery()
+            ->getArrayResult();
+    }
+
+
     //    /**
     //     * @return Artwork[] Returns an array of Artwork objects
     //     */

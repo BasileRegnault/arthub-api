@@ -16,6 +16,16 @@ class UserLoginLogRepository extends ServiceEntityRepository
         parent::__construct($registry, UserLoginLog::class);
     }
 
+    public function countLastDays(int $days): int
+    {
+        return (int) $this->createQueryBuilder('l')
+            ->select('COUNT(l.id)')
+            ->where('l.createdAt >= :date')
+            ->setParameter('date', new \DateTimeImmutable("-{$days} days"))
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     //    /**
     //     * @return UserLoginLog[] Returns an array of UserLoginLog objects
     //     */

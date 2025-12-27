@@ -15,6 +15,9 @@ use Faker\Factory;
 use App\Entity\MediaObject;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\HttpFoundation\File\File;
+use App\Entity\ActivityLog;
+use App\Entity\UserLoginLog;
+use App\Enum\AuthEvent;
 
 class AppFixtures extends Fixture
 {
@@ -61,6 +64,32 @@ class AppFixtures extends Fixture
             $user->setPassword($this->passwordHasher->hashPassword($user, 'password'));
             $manager->persist($user);
             $users[] = $user;
+        }
+
+        // --- USER LOGIN LOGS ---
+        $loginEvents = ['login', 'logout', 'failed_login'];
+
+        foreach ($users as $user) {
+            $logCount = $this->faker->numberBetween(1, 5);
+
+            for ($i = 0; $i < $logCount; $i++) {
+                $loginLog = new UserLoginLog();
+                $loginLog->setUserConnected($user);
+                $loginLog->setIp($this->faker->ipv4);
+                $loginLog->setEvent($this->faker->randomElement($loginEvents));
+                $loginLog->setUserAgent($this->faker->userAgent);
+                $loginLog->setMessage($this->faker->boolean(60)
+                    ? $this->faker->sentence(8)
+                    : null
+                );
+                $loginLog->setCreatedAt(
+                    \DateTimeImmutable::createFromMutable(
+                        $this->faker->dateTimeBetween('-6 months', 'now')
+                    )
+                );
+
+                $manager->persist($loginLog);
+            }
         }
 
         // --- ARTISTS ---
@@ -115,6 +144,7 @@ class AppFixtures extends Fixture
             $art->setLocation($this->faker->city);
             $art->setViews($this->faker->numberBetween(0, 1000));
             $art->setIsDisplay($this->faker->boolean(70));
+            $art->setIsConfirmCreate($this->faker->boolean(70));
             $art->setCreatedAt(new \DateTimeImmutable('-6 months'));
             $art->setUpdatedAt(new \DateTimeImmutable());
             $manager->persist($art);
@@ -166,6 +196,48 @@ class AppFixtures extends Fixture
                 $rating->setArtwork($art);
                 $manager->persist($rating);
             }
+        }
+
+        $manager->flush();
+
+        // --- ACTIVITY LOGS ---
+        $actions = AuthEvent::cases();
+        $entityMap = [
+            User::class => $users,
+            Artwork::class => $artworks,
+            Gallery::class => $galleries,
+        ];
+
+        for ($i = 0; $i < 50; $i++) {
+            $entityClass = $this->faker->randomElement(array_keys($entityMap));
+            $entity = $this->faker->randomElement($entityMap[$entityClass]);
+
+            $activity = new ActivityLog();
+            $activity->setAction($this->faker->randomElement($actions)->value);
+            $activity->setEntityClass($entityClass);
+            $activity->setEntityId($entity->getId());
+            $activity->setUserConnected($this->faker->randomElement($users));
+
+            // valeurs avant / après (mock réaliste)
+            if ($this->faker->boolean(60)) {
+                $activity->setOldValues([
+                    'title' => $this->faker->words(2, true),
+                    'isPublic' => false
+                ]);
+
+                $activity->setNewValues([
+                    'title' => $this->faker->words(3, true),
+                    'isPublic' => true
+                ]);
+            }
+
+            $activity->setCreatedAt(
+                \DateTimeImmutable::createFromMutable(
+                    $this->faker->dateTimeBetween('-6 months', 'now')
+                )
+            );
+
+            $manager->persist($activity);
         }
 
         $manager->flush();
