@@ -1,5 +1,5 @@
 <?php
-// api/src/Serializer/UploadedFileDenormalizer.php
+// Dénormaliseur pour les fichiers téléversés
 
 namespace App\Serializer;
 

@@ -10,7 +10,7 @@ use Doctrine\Migrations\AbstractMigration;
 /**
  * Auto-generated Migration: Please modify to your needs!
  */
-final class Version20251226153612 extends AbstractMigration
+final class Version20260216053724 extends AbstractMigration
 {
     public function getDescription(): string
     {
@@ -20,12 +20,12 @@ final class Version20251226153612 extends AbstractMigration
     public function up(Schema $schema): void
     {
         // this up() migration is auto-generated, please modify it to your needs
-        $this->addSql('ALTER TABLE artwork ADD is_confirm_create BOOLEAN NOT NULL');
+        $this->addSql('ALTER TABLE artwork ADD image_url VARCHAR(512) DEFAULT NULL');
     }
 
     public function down(Schema $schema): void
     {
         // this down() migration is auto-generated, please modify it to your needs
-        $this->addSql('ALTER TABLE artwork DROP is_confirm_create');
+        $this->addSql('ALTER TABLE artwork DROP image_url');
     }
 }

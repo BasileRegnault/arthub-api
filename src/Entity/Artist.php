@@ -14,7 +14,10 @@ use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use Symfony\Component\Serializer\Annotation\Groups;
 use ApiPlatform\Metadata\ApiProperty;
 use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
+use ApiPlatform\Doctrine\Orm\Filter\BooleanFilter;
 use ApiPlatform\Doctrine\Orm\Filter\OrderFilter;
+use App\Entity\Traits\BlameableTrait;
+use App\State\ArtistProcessor;
 
 use App\Repository\ArtistRepository;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -26,16 +29,29 @@ use Vich\UploaderBundle\Mapping\Annotation as Vich;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ApiResource(
+    paginationItemsPerPage: 10,
+    paginationClientItemsPerPage: true,
+    paginationClientEnabled: true,
     operations: [
         new GetCollection(),
         new Get(),
-        new Put(),
-        new Patch(),
-        new Delete(),
-        new Post(),
-        // new Post(security: "is_granted('ROLE_ADMIN')"),
-        // new Put(security: "is_granted('ROLE_ADMIN')"),
-        // new Delete(security: "is_granted('ROLE_ADMIN')")
+        new Post(
+            processor: ArtistProcessor::class,
+            security: "is_granted('ROLE_USER')",
+            securityMessage: "Vous devez être connecté pour créer un artiste."
+        ),
+        new Put(
+            security: "is_granted('ROLE_ADMIN') or object.getCreatedBy() == user",
+            securityMessage: "Vous ne pouvez modifier que les artistes que vous avez créés."
+        ),
+        new Patch(
+            security: "is_granted('ROLE_ADMIN') or object.getCreatedBy() == user",
+            securityMessage: "Vous ne pouvez modifier que les artistes que vous avez créés."
+        ),
+        new Delete(
+            security: "is_granted('ROLE_ADMIN')",
+            securityMessage: "Seuls les administrateurs peuvent supprimer des artistes."
+        )
     ],
     normalizationContext: ['groups' => ['artist:read']],
     denormalizationContext: ['groups' => ['artist:write']],
@@ -48,11 +64,18 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ApiFilter(SearchFilter::class, properties: [
     'firstname' => 'ipartial',
     'lastname' => 'ipartial',
-    'nationality' => 'exact'
+    'nationality' => 'exact',
+    'createdBy' => 'exact',
+])]
+#[ApiFilter(BooleanFilter::class, properties: [
+    'isConfirmCreate',
+    'toBeConfirmed'
 ])]
 #[ApiFilter(DateFilter::class, properties: [
     'bornAt',
-    'diedAt'
+    'diedAt',
+    'createdAt',
+    'updatedAt',
 ])]
 #[ApiFilter(OrderFilter::class, properties: [
     'firstname',
@@ -64,6 +87,8 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity(repositoryClass: ArtistRepository::class)]
 class Artist
 {
+    use BlameableTrait;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -114,6 +139,18 @@ class Artist
     #[ApiProperty(types: ['https://schema.org/image'])]
     #[Groups(['artist:read', 'artist:write'])]
     private ?MediaObject $profilePicture = null;
+
+    #[ORM\Column(length: 512, nullable: true)]
+    #[Groups(['artist:read', 'artist:write', 'artwork:read'])]
+    private ?string $imageUrl = null;
+
+    #[ORM\Column]
+    #[Groups(['artist:read', 'artist:write'])]
+    private ?bool $isConfirmCreate = true;
+
+    #[ORM\Column]
+    #[Groups(['artist:read', 'artist:write'])]
+    private ?bool $toBeConfirmed = true;
 
     /**
      * @var Collection<int, Artwork>
@@ -257,6 +294,42 @@ class Artist
         return $this;
     }
 
+    public function getImageUrl(): ?string
+    {
+        return $this->imageUrl;
+    }
+
+    public function setImageUrl(?string $imageUrl): static
+    {
+        $this->imageUrl = $imageUrl;
+
+        return $this;
+    }
+
+    public function getIsConfirmCreate(): ?bool
+    {
+        return $this->isConfirmCreate;
+    }
+
+    public function setIsConfirmCreate(?bool $isConfirmCreate): static
+    {
+        $this->isConfirmCreate = $isConfirmCreate;
+
+        return $this;
+    }
+
+    public function getToBeConfirmed(): ?bool
+    {
+        return $this->toBeConfirmed;
+    }
+
+    public function setToBeConfirmed(?bool $toBeConfirmed): static
+    {
+        $this->toBeConfirmed = $toBeConfirmed;
+
+        return $this;
+    }
+
     /**
      * @return Collection<int, Artwork>
      */
@@ -278,7 +351,7 @@ class Artist
     public function removeArtwork(Artwork $artwork): static
     {
         if ($this->artworks->removeElement($artwork)) {
-            // set the owning side to null (unless already changed)
+            // Mettre le côté propriétaire à null (sauf si déjà modifié)
             if ($artwork->getArtist() === $this) {
                 $artwork->setArtist(null);
             }

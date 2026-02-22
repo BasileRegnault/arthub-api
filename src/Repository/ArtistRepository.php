@@ -27,7 +27,7 @@ class ArtistRepository extends ServiceEntityRepository
 
 
     //    /**
-    //     * @return Artist[] Returns an array of Artist objects
+    //     * @return Artist[] Retourne un tableau d'objets Artist
     //     */
     //    public function findByExampleField($value): array
     //    {

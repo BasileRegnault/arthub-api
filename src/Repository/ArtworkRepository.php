@@ -52,7 +52,7 @@ class ArtworkRepository extends ServiceEntityRepository
 
 
     //    /**
-    //     * @return Artwork[] Returns an array of Artwork objects
+    //     * @return Artwork[] Retourne un tableau d'objets Artwork
     //     */
     //    public function findByExampleField($value): array
     //    {

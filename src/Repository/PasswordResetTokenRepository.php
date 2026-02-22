@@ -17,7 +17,7 @@ class PasswordResetTokenRepository extends ServiceEntityRepository
     }
 
     //    /**
-    //     * @return PasswordResetToken[] Returns an array of PasswordResetToken objects
+    //     * @return PasswordResetToken[] Retourne un tableau d'objets PasswordResetToken
     //     */
     //    public function findByExampleField($value): array
     //    {

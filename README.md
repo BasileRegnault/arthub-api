@@ -203,6 +203,13 @@ Rating
 # Cloner le projet
 git clone https://github.com/toncompte/arthub-api.git
 cd arthub-api
+
+
+php bin/console make:migration
+php bin/console doctrine:database:drop --force
+php bin/console doctrine:database:create
+php bin/console doctrine:migrations:migrate
+php bin/console doctrine:fixtures:load
 ```
 
 ### 🌐 Accès API

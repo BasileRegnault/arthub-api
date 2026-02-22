@@ -27,7 +27,7 @@ class UserLoginLogRepository extends ServiceEntityRepository
     }
 
     //    /**
-    //     * @return UserLoginLog[] Returns an array of UserLoginLog objects
+    //     * @return UserLoginLog[] Retourne un tableau d'objets UserLoginLog
     //     */
     //    public function findByExampleField($value): array
     //    {

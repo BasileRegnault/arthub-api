@@ -12,7 +12,11 @@ use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use Symfony\Component\Serializer\Annotation\Groups;
 use ApiPlatform\Metadata\ApiProperty;
+use ApiPlatform\Doctrine\Orm\Filter\BooleanFilter;
+use ApiPlatform\Doctrine\Orm\Filter\DateFilter;
+use ApiPlatform\Metadata\Patch;
 use Symfony\Component\Validator\Constraints as Assert;
+use App\Entity\Traits\BlameableTrait;
 
 use App\Repository\GalleryRepository;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -21,23 +25,54 @@ use Doctrine\ORM\Mapping as ORM;
 
 #[ApiResource(
     operations: [
-        new GetCollection(security: "is_granted('ROLE_USER')"),
+        new GetCollection(),
         new Get(),
-        new Post(security: "is_granted('ROLE_USER')"),
-        new Put(security: "is_granted('ROLE_ADMIN') or object.getOwner() == user"),
-        new Delete(security: "is_granted('ROLE_ADMIN') or object.getOwner() == user")
+        new Post(
+            security: "is_granted('ROLE_USER')",
+            securityMessage: "Vous devez être connecté pour créer une galerie."
+        ),
+        new Put(
+            security: "is_granted('ROLE_ADMIN') or object.getCreatedBy() == user",
+            securityMessage: "Vous ne pouvez modifier que vos propres galeries."
+        ),
+        new Patch(
+            security: "is_granted('ROLE_ADMIN') or object.getCreatedBy() == user",
+            securityMessage: "Vous ne pouvez modifier que vos propres galeries."
+        ),
+        new Delete(
+            security: "is_granted('ROLE_ADMIN') or object.getCreatedBy() == user",
+            securityMessage: "Vous ne pouvez supprimer que vos propres galeries."
+        )
+    ],
+    formats: [
+        'jsonld' => ['application/ld+json'],
+        'multipart' => ['multipart/form-data'],
+        'json' => ['application/json'],
     ],
     normalizationContext: ['groups' => ['gallery:read']],
     denormalizationContext: ['groups' => ['gallery:write']]
 )]
 #[ORM\HasLifecycleCallbacks]
 #[ORM\Entity(repositoryClass: GalleryRepository::class)]
+#[ApiFilter(SearchFilter::class, properties: [
+    'name' => 'partial',
+    'createdBy' => 'exact',
+])]
+#[ApiFilter(BooleanFilter::class, properties: [
+    'isPublic'
+])]
+#[ApiFilter(DateFilter::class, properties: [
+    'createdAt',
+    'updatedAt'
+])]
 class Gallery
 {
+    use BlameableTrait;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['gallery:read'])]
+    #[Groups(['gallery:read', 'user:detail', 'gallery:detail'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
@@ -46,7 +81,7 @@ class Gallery
         max: 255,
         maxMessage: "Le nom ne peut pas dépasser {{ limit }} caractères."
     )]
-    #[Groups(['gallery:read', 'gallery:write'])]
+    #[Groups(['gallery:read', 'gallery:write', 'user:detail', 'gallery:detail'])]
     private ?string $name = null;
 
     #[ORM\Column(length: 255, nullable: true)]
@@ -54,43 +89,37 @@ class Gallery
         max: 255,
         maxMessage: "La description ne peut pas dépasser {{ limit }} caractères."
     )]
-    #[Groups(['gallery:read', 'gallery:write'])]
+    #[Groups(['gallery:read', 'gallery:write', 'user:detail', 'gallery:detail'])]
     private ?string $description = null;
 
     #[ORM\ManyToOne(targetEntity: MediaObject::class)]
     #[ORM\JoinColumn(nullable: true)]
     #[ApiProperty(types: ['https://schema.org/image'])]
-    #[Groups(['gallery:read', 'gallery:write'])]
+    #[Groups(['gallery:read', 'gallery:write', 'user:detail', 'gallery:detail'])]
     private ?MediaObject $coverImage = null;
-
-    #[ORM\Column(nullable: true)]
-    #[Assert\PositiveOrZero(message: "Le nombre de vues doit être positif ou nul.")]
-    #[Groups(['gallery:read', 'gallery:write'])]
-    private ?int $views = null;
 
     #[ORM\Column]
     #[Assert\NotNull(message: "Le statut de publication est requis.")]
-    #[Groups(['gallery:read', 'gallery:write'])]
+    #[Groups(['gallery:read', 'gallery:write', 'user:detail', 'gallery:detail'])]
     private ?bool $isPublic = null;
-
-    #[ORM\ManyToOne(inversedBy: 'galleries')]
-    #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull(message: "Le propriétaire est requis.")]
-    #[Groups(['gallery:read', 'gallery:write'])]
-    private ?User $owner = null;
 
     /**
      * @var Collection<int, Artwork>
      */
     #[ORM\ManyToMany(targetEntity: Artwork::class, inversedBy: 'galleries')]
-    #[Groups(['gallery:read', 'gallery:write'])]
+    #[Groups(['gallery:read', 'gallery:write', 'gallery:detail'])]
     private Collection $artworks;
 
     #[ORM\Column(options: ['default' => 'CURRENT_TIMESTAMP'])]
+    #[Groups(['gallery:read', 'gallery:detail'])]
     private ?\DateTimeImmutable $createdAt = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['gallery:read', 'gallery:detail'])]
     private ?\DateTimeImmutable $updatedAt = null;
+
+    #[Groups(['gallery:read'])]
+    private ?int $views = null;
 
     public function __construct()
     {
@@ -155,7 +184,7 @@ class Gallery
         return $this;
     }
 
-    public function isPublic(): ?bool
+    public function getIsPublic(): ?bool
     {
         return $this->isPublic;
     }
@@ -163,30 +192,6 @@ class Gallery
     public function setIsPublic(bool $isPublic): static
     {
         $this->isPublic = $isPublic;
-
-        return $this;
-    }
-
-    public function getViews(): ?int
-    {
-        return $this->views;
-    }
-
-    public function setViews(?int $views): static
-    {
-        $this->views = $views;
-
-        return $this;
-    }
-
-    public function getOwner(): ?User
-    {
-        return $this->owner;
-    }
-
-    public function setOwner(?User $owner): static
-    {
-        $this->owner = $owner;
 
         return $this;
     }
@@ -237,5 +242,16 @@ class Gallery
         $this->updatedAt = $updatedAt;
 
         return $this;
+    }
+
+    public function setViews(?int $views): static
+    {
+        $this->views = $views;
+        return $this;
+    }
+
+    public function getViews(): ?int
+    {
+        return $this->views;
     }
 }

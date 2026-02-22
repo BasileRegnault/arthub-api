@@ -28,6 +28,7 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use App\Entity\Traits\BlameableTrait;
 use Vich\UploaderBundle\Mapping\Annotation as Vich;
 
 #[ApiResource(
@@ -37,12 +38,23 @@ use Vich\UploaderBundle\Mapping\Annotation as Vich;
     operations: [
         new GetCollection(),
         new Get(),
-        new Post(processor: ArtworkProcessor::class),
-        new Put(),
-        new Patch(),
-        new Delete()
-        //new Put(security: "is_granted('ROLE_ADMIN')"),
-        //new Delete(security: "is_granted('ROLE_ADMIN')")
+        new Post(
+            processor: ArtworkProcessor::class,
+            security: "is_granted('ROLE_USER')",
+            securityMessage: "Vous devez être connecté pour créer une œuvre."
+        ),
+        new Put(
+            security: "is_granted('ROLE_ADMIN') or object.getCreatedBy() == user",
+            securityMessage: "Vous ne pouvez modifier que vos propres œuvres."
+        ),
+        new Patch(
+            security: "is_granted('ROLE_ADMIN') or object.getCreatedBy() == user",
+            securityMessage: "Vous ne pouvez modifier que vos propres œuvres."
+        ),
+        new Delete(
+            security: "is_granted('ROLE_ADMIN')",
+            securityMessage: "Seuls les administrateurs peuvent supprimer des œuvres."
+        )
     ],
     normalizationContext: ['groups' => ['artwork:read']],
     denormalizationContext: ['groups' => ['artwork:write']],
@@ -58,13 +70,15 @@ use Vich\UploaderBundle\Mapping\Annotation as Vich;
     'style' => 'exact',
     'location' => 'partial',
     'artist' => 'exact',
+    'createdBy' => 'exact',
     'artist.firstname' => 'partial',
     'artist.lastname' => 'partial',
 ])]
 
 #[ApiFilter(BooleanFilter::class, properties: [
     'isDisplay',
-    'isConfirmCreate'
+    'isConfirmCreate',
+    'toBeConfirmed'
 ])]
 
 #[ApiFilter(DateFilter::class, properties: [
@@ -77,7 +91,6 @@ use Vich\UploaderBundle\Mapping\Annotation as Vich;
     'title',
     'creationDate',
     'createdAt',
-    'views',
 ], arguments: [
     'orderParameterName' => 'order'
 ])]
@@ -86,36 +99,38 @@ use Vich\UploaderBundle\Mapping\Annotation as Vich;
 #[ORM\Entity(repositoryClass: ArtworkRepository::class)]
 class Artwork
 {
+    use BlameableTrait;
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['artwork:read', 'artist:read', 'gallery:read', 'rating:read'])]
+    #[Groups(['artwork:read', 'artist:read', 'gallery:read', 'rating:read', 'gallery:read'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['artwork:read', 'artwork:write', 'artist:read', 'gallery:read'])]
+    #[Groups(['artwork:read', 'artwork:write', 'artist:read', 'gallery:read', 'gallery:read'])]
     #[Assert\NotBlank(message: "Le titre est obligatoire.")]
     #[Assert\Length(min: 2, minMessage: "Le titre doit faire au moins 2 caractères.")]
     private ?string $title = null;
 
     #[ORM\Column(enumType: ArtworkType::class)]
-    #[Groups(['artwork:read', 'artwork:write'])]
+    #[Groups(['artwork:read', 'artwork:write', 'gallery:read'])]
     #[Assert\NotBlank(message: "Le type est obligatoire.")]
     private ?ArtworkType $type = null;
 
     #[ORM\Column(enumType: ArtworkStyle::class)]
-    #[Groups(['artwork:read', 'artwork:write'])]
+    #[Groups(['artwork:read', 'artwork:write', 'gallery:read'])]
     #[Assert\NotBlank(message: "Le style est obligatoire.")]
     private ?ArtworkStyle $style = null;
 
     #[ORM\Column(type: Types::DATE_IMMUTABLE)]
-    #[Groups(['artwork:read', 'artwork:write'])]
+    #[Groups(['artwork:read', 'artwork:write', 'gallery:read'])]
     #[Assert\NotBlank(message: "La date de création est obligatoire.")]
     #[Assert\LessThanOrEqual("today", message: "L'œuvre ne peut pas être datée du futur.")]
     private ?\DateTimeImmutable $creationDate = null;
 
     #[ORM\Column(type: Types::TEXT)]
-    #[Groups(['artwork:read', 'artwork:write'])]
+    #[Groups(['artwork:read', 'artwork:write', 'gallery:read'])]
     #[Assert\NotBlank(message: "La description est obligatoire.")]
     #[Assert\Length(min: 20, minMessage: "La description doit faire au moins 20 caractères.")]
     private ?string $description = null;
@@ -123,37 +138,37 @@ class Artwork
     #[ORM\ManyToOne(targetEntity: MediaObject::class)]
     #[ORM\JoinColumn(nullable: true)]
     #[ApiProperty(types: ['https://schema.org/image'])]
-    #[Groups(['artwork:read', 'artwork:write'])]
+    #[Groups(['artwork:read', 'artwork:write', 'gallery:read'])]
     private ?MediaObject $image = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
-    #[Groups(['artwork:read', 'artwork:write'])]
-    private ?string $location = null;
+    #[ORM\Column(length: 512, nullable: true)]
+    #[Groups(['artwork:read', 'artwork:write', 'gallery:read'])]
+    private ?string $imageUrl = null;
 
-    #[ORM\Column(nullable: true)]
-    #[Groups(['artwork:read'])]
-    private ?int $views = 0;
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['artwork:read', 'artwork:write', 'gallery:read'])]
+    private ?string $location = null;
 
     #[ORM\ManyToOne(inversedBy: 'artworks')]
     #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['artwork:read', 'artwork:write'])]
+    #[Groups(['artwork:read', 'artwork:write', 'gallery:read'])]
     #[Assert\NotNull(message: "L'artiste est obligatoire.")]
     private ?Artist $artist = null;
 
     #[ORM\Column(options: ['default' => 'CURRENT_TIMESTAMP'])]
-    #[Groups(['artwork:read'])]
+    #[Groups(['artwork:read', 'gallery:read'])]
     private ?\DateTimeImmutable $createdAt = null;
 
     #[ORM\Column(nullable: true)]
-    #[Groups(['artwork:read'])]
+    #[Groups(['artwork:read', 'gallery:read'])]
     private ?\DateTimeImmutable $updatedAt = null;
 
     #[ORM\Column]
-    #[Groups(['artwork:read', 'artwork:write'])]
+    #[Groups(['artwork:read', 'artwork:write', 'gallery:read'])]
     private ?bool $isDisplay = true;
 
     #[ORM\Column]
-    #[Groups(['artwork:read', 'artwork:write'])]
+    #[Groups(['artwork:read', 'artwork:write', 'gallery:read'])]
     private ?bool $isConfirmCreate = true;
 
     /**
@@ -166,8 +181,16 @@ class Artwork
      * @var Collection<int, Rating>
      */
     #[ORM\OneToMany(targetEntity: Rating::class, mappedBy: 'artwork')]
-    #[Groups(['artwork:read'])]
+    #[Groups(['artwork:read', 'gallery:read'])]
     private Collection $ratings;
+
+    #[ORM\Column]
+    #[Groups(['artwork:read', 'artwork:write', 'gallery:read'])]
+    private ?bool $toBeConfirmed = true;
+
+    #[Groups(['artwork:read'])]
+    private ?int $views = null;
+
 
     public function __construct()
     {
@@ -258,13 +281,24 @@ class Artwork
     }
 
     public function getImage(): ?MediaObject
-    { 
-        return $this->image; 
+    {
+        return $this->image;
     }
 
-    public function setImage(?MediaObject $img): static 
-    { 
-        $this->image = $img; return $this; 
+    public function setImage(?MediaObject $img): static
+    {
+        $this->image = $img; return $this;
+    }
+
+    public function getImageUrl(): ?string
+    {
+        return $this->imageUrl;
+    }
+
+    public function setImageUrl(?string $imageUrl): static
+    {
+        $this->imageUrl = $imageUrl;
+        return $this;
     }
 
     public function getLocation(): ?string
@@ -275,18 +309,6 @@ class Artwork
     public function setLocation(?string $location): static
     {
         $this->location = $location;
-
-        return $this;
-    }
-
-    public function getViews(): ?int
-    {
-        return $this->views;
-    }
-
-    public function setViews(?int $views): static
-    {
-        $this->views = $views;
 
         return $this;
     }
@@ -351,6 +373,18 @@ class Artwork
         return $this;
     }
 
+    public function getToBeConfirmed(): ?bool
+    {
+        return $this->toBeConfirmed;
+    }
+
+    public function setToBeConfirmed(?bool $toBeConfirmed): static
+    {
+        $this->toBeConfirmed = $toBeConfirmed;
+
+        return $this;
+    }
+
     /**
      * @return Collection<int, Gallery>
      */
@@ -399,12 +433,23 @@ class Artwork
     public function removeRating(Rating $rating): static
     {
         if ($this->ratings->removeElement($rating)) {
-            // set the owning side to null (unless already changed)
+            // Mettre le côté propriétaire à null (sauf si déjà modifié)
             if ($rating->getArtwork() === $this) {
                 $rating->setArtwork(null);
             }
         }
 
         return $this;
+    }
+
+    public function setViews(?int $views): static
+    {
+        $this->views = $views;
+        return $this;
+    }
+
+    public function getViews(): ?int
+    {
+        return $this->views;
     }
 }

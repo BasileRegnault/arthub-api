@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Put;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
 use Symfony\Component\Serializer\Annotation\Groups;
+use App\Entity\Traits\BlameableTrait;
 
 use App\Repository\RatingRepository;
 use Doctrine\DBAL\Types\Types;
@@ -23,8 +24,8 @@ use Symfony\Component\Validator\Constraints as Assert;
         new GetCollection(),
         new Get(),
         new Post(security: "is_granted('ROLE_USER')"),
-        new Put(security: "object.getUser() == user or is_granted('ROLE_ADMIN')"),
-        new Delete(security: "object.getUser() == user or is_granted('ROLE_ADMIN')")
+        new Put(security: "object.getCreatedBy() == user or is_granted('ROLE_ADMIN')"),
+        new Delete(security: "object.getCreatedBy() == user or is_granted('ROLE_ADMIN')")
     ],
     normalizationContext: ['groups' => ['rating:read']],
     denormalizationContext: ['groups' => ['rating:write']]
@@ -33,10 +34,12 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity(repositoryClass: RatingRepository::class)]
 class Rating
 {
-#[ORM\Id]
+    use BlameableTrait;
+    
+    #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['rating:read', 'artwork:read', 'user:read'])]
+    #[Groups(['rating:read', 'artwork:read', 'user:read', 'user:detail'])]
     private ?int $id = null;
 
     #[ORM\Column(type: 'float')]
@@ -46,29 +49,25 @@ class Rating
         max: 5,
         notInRangeMessage: "Le score doit être compris entre {{ min }} et {{ max }}."
     )]
-    #[Groups(['rating:read', 'rating:write', 'artwork:read'])]
+    #[Groups(['rating:read', 'rating:write', 'artwork:read', 'user:detail'])]
     private ?float $score = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
-    #[Groups(['rating:read', 'rating:write'])]
+    #[Groups(['rating:read', 'rating:write', 'user:detail'])]
     private ?string $comment = null;
-
-    #[ORM\ManyToOne(inversedBy: 'ratings')]
-    #[ORM\JoinColumn(nullable: false)]
-    #[Assert\NotNull(message: "L'auteur est obligatoire.")]
-    #[Groups(['rating:read', 'rating:write'])]
-    private ?User $author = null;
 
     #[ORM\ManyToOne(inversedBy: 'ratings')]
     #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
     #[Assert\NotNull(message: "L'œuvre est obligatoire.")]
-    #[Groups(['rating:read', 'rating:write'])]
+    #[Groups(['rating:read', 'rating:write', 'user:detail'])]
     private ?Artwork $artwork = null;
 
     #[ORM\Column(options: ['default' => 'CURRENT_TIMESTAMP'])]
+    #[Groups(['rating:read', 'rating:write', 'user:detail'])]
     private ?\DateTimeImmutable $createdAt = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['rating:read', 'rating:write', 'user:detail'])]
     private ?\DateTimeImmutable $updatedAt = null;
 
     #[ORM\PrePersist]
@@ -113,18 +112,6 @@ class Rating
     public function setComment(?string $comment): static
     {
         $this->comment = $comment;
-
-        return $this;
-    }
-
-    public function getAuthor(): ?User
-    {
-        return $this->author;
-    }
-
-    public function setAuthor(?User $author): static
-    {
-        $this->author = $author;
 
         return $this;
     }

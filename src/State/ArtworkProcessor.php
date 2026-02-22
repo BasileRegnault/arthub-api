@@ -3,6 +3,7 @@
 namespace App\State;
 
 use ApiPlatform\Metadata\Operation;
+use ApiPlatform\Metadata\Post;
 use ApiPlatform\State\ProcessorInterface;
 use ApiPlatform\Doctrine\Orm\State\PersistProcessor;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -23,9 +24,13 @@ class ArtworkProcessor implements ProcessorInterface
         array $uriVariables = [],
         array $context = []
     ): mixed {
-        if ($data instanceof Artwork) {
+        if ($data instanceof Artwork && $operation instanceof Post) {
             $data->setIsConfirmCreate(
                 $this->security->isGranted('ROLE_ADMIN')
+            );
+
+            $data->setToBeConfirmed(
+                !$this->security->isGranted('ROLE_ADMIN')
             );
         }
 

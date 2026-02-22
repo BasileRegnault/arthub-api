@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\Gallery;
+use App\Entity\GalleryDailyView;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -16,8 +17,19 @@ class GalleryRepository extends ServiceEntityRepository
         parent::__construct($registry, Gallery::class);
     }
 
+    public function getTotalViews(Gallery $gallery): int
+    {
+        return $this->createQueryBuilder('v')
+            ->select('COUNT(v.id)')
+            ->from(GalleryDailyView::class, 'v')
+            ->where('v.gallery = :gallery')
+            ->setParameter('gallery', $gallery)
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     //    /**
-    //     * @return Gallery[] Returns an array of Gallery objects
+    //     * @return Gallery[] Retourne un tableau d'objets Gallery
     //     */
     //    public function findByExampleField($value): array
     //    {

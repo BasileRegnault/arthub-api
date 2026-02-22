@@ -1,5 +1,5 @@
 <?php
-// api/src/Serializer/MediaObjectNormalizer.php
+// Normaliseur pour l'entité MediaObject
 
 namespace App\Serializer;
 

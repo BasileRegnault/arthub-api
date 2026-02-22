@@ -3,117 +3,166 @@
 namespace App\EventListener;
 
 use App\Entity\ActivityLog;
-use Doctrine\ORM\Events;
-use Doctrine\ORM\Event\PostPersistEventArgs;
-use Doctrine\ORM\Event\PreUpdateEventArgs;
-use Doctrine\ORM\Event\PreRemoveEventArgs;
-use Symfony\Bundle\SecurityBundle\Security;
+use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
+use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\Event\OnFlushEventArgs;
+use Doctrine\ORM\Event\PostFlushEventArgs;
+use Doctrine\ORM\Events;
+use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpKernel\KernelInterface;
 
-#[AsDoctrineListener(event: Events::postPersist)]
-#[AsDoctrineListener(event: Events::preUpdate)]
-#[AsDoctrineListener(event: Events::preRemove)]
+#[AsDoctrineListener(event: Events::onFlush)]
+#[AsDoctrineListener(event: Events::postFlush)]
 class DoctrineActivityListener
 {
+    private array $pendingInsertions = [];
+    private ?User $resolvedUser = null;
+    private bool $isFlushingLogs = false;
+
     public function __construct(
-        private Security $security
+        private Security $security,
+        private KernelInterface $kernel,
     ) {}
 
-    /* =========================
-     * CREATE
-     * ========================= */
-    public function postPersist(PostPersistEventArgs $args): void
+    public function onFlush(OnFlushEventArgs $args): void
     {
-        $this->log(
-            action: 'CREATE',
-            entity: $args->getObject(),
-            em: $args->getObjectManager()
-        );
-    }
+        $em = $args->getObjectManager();
+        $uow = $em->getUnitOfWork();
 
-    /* =========================
-     * UPDATE
-     * ========================= */
-    public function preUpdate(PreUpdateEventArgs $args): void
-    {
-        $oldValues = [];
-        $newValues = [];
-
-        foreach ($args->getEntityChangeSet() as $field => [$old, $new]) {
-            $oldValues[$field] = $old;
-            $newValues[$field] = $new;
+        $user = $this->resolveUser($em);
+        if (!$user) {
+            return;
         }
 
-        $this->log(
-            action: 'UPDATE',
-            entity: $args->getObject(),
-            em: $args->getObjectManager(),
-            oldValues: $oldValues,
-            newValues: $newValues
-        );
+        $this->resolvedUser = $user;
+
+        foreach ($uow->getScheduledEntityInsertions() as $entity) {
+            if ($entity instanceof ActivityLog) {
+                continue;
+            }
+            if (!method_exists($entity, 'getId')) {
+                continue;
+            }
+            $this->pendingInsertions[] = $entity;
+        }
+
+        foreach ($uow->getScheduledEntityUpdates() as $entity) {
+            $this->createLog(
+                'UPDATE',
+                $entity,
+                $em,
+                $user,
+                $uow->getEntityChangeSet($entity)
+            );
+        }
+
+        foreach ($uow->getScheduledEntityDeletions() as $entity) {
+            $this->createLog('DELETE', $entity, $em, $user);
+        }
     }
 
-    /* =========================
-     * DELETE
-     * ========================= */
-    public function preRemove(PreRemoveEventArgs $args): void
+    public function postFlush(PostFlushEventArgs $args): void
     {
-        $entity = $args->getObject();
+        if ($this->isFlushingLogs) {
+            return;
+        }
 
-        $this->log(
-            action: 'DELETE',
-            entity: $entity,
-            em: $args->getObjectManager(),
-            oldValues: $this->extractEntityData($entity)
-        );
+        if (!$this->resolvedUser) {
+            $this->pendingInsertions = [];
+            return;
+        }
+
+        if (!$this->pendingInsertions) {
+            return;
+        }
+
+        $em = $args->getObjectManager();
+
+        $this->isFlushingLogs = true;
+
+        foreach ($this->pendingInsertions as $entity) {
+            if (!method_exists($entity, 'getId')) {
+                continue;
+            }
+
+            $id = $entity->getId();
+            if (!$id) {
+                continue;
+            }
+
+            $log = new ActivityLog();
+            $log->setAction('CREATE');
+            $log->setEntityClass($entity::class);
+            $log->setEntityId((int) $id);
+            $log->setUserConnected($this->resolvedUser);
+
+            $em->persist($log);
+        }
+
+        $this->pendingInsertions = [];
+
+        $em->flush();
+
+        $this->isFlushingLogs = false;
     }
 
-    /* =========================
-     * LOG COMMON
-     * ========================= */
-    private function log(
+    private function resolveUser(EntityManagerInterface $em): ?User
+    {
+        $user = $this->security->getUser();
+        if ($user instanceof User) {
+            return $user;
+        }
+
+        if ($this->kernel->getEnvironment() === 'dev') {
+            $conn = $em->getConnection();
+
+            $adminId = $conn->fetchOne(
+                'SELECT id FROM "user" WHERE roles::jsonb @> :role::jsonb ORDER BY id ASC LIMIT 1',
+                ['role' => json_encode(['ROLE_ADMIN'])]
+            );
+
+            if ($adminId) {
+                return $em->getRepository(User::class)->find((int) $adminId);
+            }
+        }
+
+        return null;
+    }
+
+    private function createLog(
         string $action,
         object $entity,
-        $em,
-        ?array $oldValues = null,
-        ?array $newValues = null
+        EntityManagerInterface $em,
+        User $user,
+        ?array $changes = null
     ): void {
-        // éviter boucle infinie
         if ($entity instanceof ActivityLog) {
             return;
         }
 
-        $user = $this->security->getUser();
-        if (!$user || !method_exists($entity, 'getId')) {
+        if (!method_exists($entity, 'getId')) {
+            return;
+        }
+
+        $id = $entity->getId();
+        if (!$id) {
             return;
         }
 
         $log = new ActivityLog();
         $log->setAction($action);
         $log->setEntityClass($entity::class);
-        $log->setEntityId($entity->getId());
+        $log->setEntityId((int) $id);
         $log->setUserConnected($user);
-        $log->setOldValues($oldValues);
-        $log->setNewValues($newValues);
+        $log->setOldValues($changes ? array_column($changes, 0) : null);
+        $log->setNewValues($changes ? array_column($changes, 1) : null);
 
         $em->persist($log);
-        $em->flush();
-    }
 
-    /* =========================
-     * HELPERS
-     * ========================= */
-    private function extractEntityData(object $entity): array
-    {
-        $data = [];
-
-        foreach (get_object_vars($entity) as $property => $value) {
-            if (is_object($value)) {
-                continue;
-            }
-            $data[$property] = $value;
-        }
-
-        return $data;
+        $em->getUnitOfWork()->computeChangeSet(
+            $em->getClassMetadata(ActivityLog::class),
+            $log
+        );
     }
 }

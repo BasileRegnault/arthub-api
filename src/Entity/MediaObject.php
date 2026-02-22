@@ -47,7 +47,7 @@ class MediaObject
     #[Groups(['media_object:read'])]
     public ?string $filePath = null;
 
-    #[Groups(['artwork:read','artist:read', 'media_object:read'])]
+    #[Groups(['artwork:read','artist:read','user:read', 'media_object:read', 'user:detail', 'gallery:read', 'gallery:detail'])]
     public ?string $contentUrl = null;
 
     #[ORM\Column(type: 'datetime_immutable')]

@@ -23,36 +23,36 @@ class ActivityLog
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['activity_log:read'])]
+    #[Groups(['activity_log:read', 'user:detail'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 50)]
-    #[Groups(['activity_log:read', 'activity_log:write'])]
+    #[Groups(['activity_log:read', 'activity_log:write', 'user:detail'])]
     private ?string $action = null;
 
     #[ORM\Column(length: 255)]
-    #[Groups(['activity_log:read', 'activity_log:write'])]
+    #[Groups(['activity_log:read', 'activity_log:write', 'user:detail'])]
     private ?string $entityClass = null;
 
     #[ORM\Column]
-    #[Groups(['activity_log:read', 'activity_log:write'])]
+    #[Groups(['activity_log:read', 'activity_log:write', 'user:detail'])]
     private ?int $entityId = null;
 
     #[ORM\ManyToOne(inversedBy: 'activityLogs')]
     #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['activity_log:read', 'activity_log:write'])]
+    #[Groups(['activity_log:read', 'activity_log:write', 'user:detail'])]
     private ?User $userConnected = null;
 
     #[ORM\Column(type: 'json', nullable: true)]
-    #[Groups(['activity_log:read', 'activity_log:write'])]
+    #[Groups(['activity_log:read', 'activity_log:write', 'user:detail'])]
     private ?array $oldValues = null;
 
     #[ORM\Column(type: 'json', nullable: true)]
-    #[Groups(['activity_log:read', 'activity_log:write'])]
+    #[Groups(['activity_log:read', 'activity_log:write', 'user:detail'])]
     private ?array $newValues = null;
 
     #[ORM\Column]
-    #[Groups(['activity_log:read'])]
+    #[Groups(['activity_log:read', 'user:detail'])]
     private ?\DateTimeImmutable $createdAt = null;
 
     public function __construct()

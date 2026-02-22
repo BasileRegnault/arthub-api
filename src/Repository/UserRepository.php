@@ -20,7 +20,7 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     }
 
     /**
-     * Used to upgrade (rehash) the user's password automatically over time.
+     * Permet de mettre à jour (re-hasher) automatiquement le mot de passe de l'utilisateur au fil du temps.
      */
     public function upgradePassword(PasswordAuthenticatedUserInterface $user, string $newHashedPassword): void
     {
@@ -34,7 +34,7 @@ class UserRepository extends ServiceEntityRepository implements PasswordUpgrader
     }
 
     //    /**
-    //     * @return User[] Returns an array of User objects
+    //     * @return User[] Retourne un tableau d'objets User
     //     */
     //    public function findByExampleField($value): array
     //    {

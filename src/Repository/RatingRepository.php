@@ -17,7 +17,7 @@ class RatingRepository extends ServiceEntityRepository
     }
 
     //    /**
-    //     * @return Rating[] Returns an array of Rating objects
+    //     * @return Rating[] Retourne un tableau d'objets Rating
     //     */
     //    public function findByExampleField($value): array
     //    {

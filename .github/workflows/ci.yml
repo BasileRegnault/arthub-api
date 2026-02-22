@@ -1,0 +1,71 @@
+name: CI Backend
+
+on:
+  push:
+    branches: [main, api]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: arthub_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      APP_ENV: test
+      APP_SECRET: ci-test-secret-key-for-github-actions
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/arthub_test?serverVersion=15
+      JWT_PASSPHRASE: ci-test-passphrase
+      MAILER_DSN: "null://null"
+      CORS_ALLOW_ORIGIN: "^https?://localhost(:[0-9]+)?$"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: 8.3
+          extensions: pdo_pgsql, intl, zip, gd
+          coverage: none
+
+      - name: Get Composer cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+      - name: Cache Composer dependencies
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.composer-cache.outputs.dir }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.lock') }}
+          restore-keys: ${{ runner.os }}-composer-
+
+      - name: Install dependencies
+        run: composer install --no-progress --no-interaction --prefer-dist
+
+      - name: Generate JWT keys
+        run: php bin/console lexik:jwt:generate-keypair --skip-if-exists
+
+      - name: Create test database
+        run: php bin/console doctrine:database:create --env=test --if-not-exists
+
+      - name: Run migrations
+        run: php bin/console doctrine:migrations:migrate --env=test --no-interaction
+
+      - name: Run tests
+        run: vendor/bin/phpunit

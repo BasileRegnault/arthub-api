@@ -5,6 +5,7 @@ namespace App\Controller\Auth;
 use App\Entity\User;
 use App\Entity\UserLoginLog;
 use App\Enum\AuthEvent;
+use App\Security\IpHasher;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -14,6 +15,9 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 
 class RegisterController extends AbstractController
 {
+
+    public function __construct(private IpHasher $ipHasher) {}
+
     #[Route('/api/register', name: 'api_register', methods: ['POST'])]
     public function register(
         Request $request,
@@ -81,7 +85,7 @@ class RegisterController extends AbstractController
             $log = new UserLoginLog();
             $log->setUserConnected($user);
             $log->setEvent($event->value);
-            $log->setIp($request->getClientIp() ?? 'unknown');
+            $log->setIpHash($this->ipHasher->hash($request->getClientIp()));
             $log->setUserAgent($request->headers->get('User-Agent'));
             $log->setMessage($reason);
 

@@ -17,7 +17,7 @@ class ActivityLogRepository extends ServiceEntityRepository
     }
 
     //    /**
-    //     * @return ActivityLog[] Returns an array of ActivityLog objects
+    //     * @return ActivityLog[] Retourne un tableau d'objets ActivityLog
     //     */
     //    public function findByExampleField($value): array
     //    {

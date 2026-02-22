@@ -23,32 +23,32 @@ class UserLoginLog
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
-    #[Groups(['user_login_log:read'])]
+    #[Groups(['user_login_log:read', 'user:detail'])]
     private ?int $id = null;
 
     #[ORM\ManyToOne(inversedBy: 'userLoginLogs')]
-    #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['user_login_log:read', 'user_login_log:write'])]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    #[Groups(['user_login_log:read', 'user_login_log:write', 'user:detail'])]
     private ?User $userConnected = null;
 
-    #[ORM\Column(length: 255)]
-    #[Groups(['user_login_log:read', 'user_login_log:write'])]
-    private ?string $ip = null;
+    #[ORM\Column(length: 64)]
+    #[Groups(['user_login_log:read', 'user_login_log:write', 'user:detail'])]
+    private ?string $ipHash = null;
 
     #[ORM\Column(length: 20)]
-    #[Groups(['user_login_log:read', 'user_login_log:write'])]
+    #[Groups(['user_login_log:read', 'user_login_log:write', 'user:detail'])]
     private ?string $event = null;
 
     #[ORM\Column(length: 255, nullable: true)]
-    #[Groups(['user_login_log:read', 'user_login_log:write'])]
+    #[Groups(['user_login_log:read', 'user_login_log:write', 'user:detail'])]
     private ?string $userAgent = null;
 
     #[ORM\Column(length: 255, nullable: true)]
-    #[Groups(['user_login_log:read', 'user_login_log:write'])]
+    #[Groups(['user_login_log:read', 'user_login_log:write', 'user:detail'])]
     private ?string $message = null;
 
     #[ORM\Column]
-    #[Groups(['user_login_log:read'])]
+    #[Groups(['user_login_log:read', 'user:detail'])]
     private ?\DateTimeImmutable $createdAt = null;
 
     public function __construct()
@@ -80,14 +80,14 @@ class UserLoginLog
         return $this;
     }
 
-    public function getIp(): ?string
+    public function getIpHash(): ?string
     {
-        return $this->ip;
+        return $this->ipHash;
     }
 
-    public function setIp(string $ip): static
+    public function setIpHash(string $ipHash): static
     {
-        $this->ip = $ip;
+        $this->ipHash = $ipHash;
         return $this;
     }
 
